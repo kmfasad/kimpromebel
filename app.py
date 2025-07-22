@@ -27,6 +27,7 @@ class Consultation(StatesGroup):
     waiting_for_phone = State()
 
 class ProjectOrder(StatesGroup):
+    waiting_for_name = State()
     waiting_for_description = State()
     waiting_for_phone = State()
 
@@ -65,6 +66,11 @@ async def handle_buttons(message: types.Message, state: FSMContext):
         await state.clear()
 
     elif text == "🛠 Заказать проект":
+        await message.answer("Как вас зовут? ✍️")
+        await state.set_state(ProjectOrder.waiting_for_name)
+
+    elif current_state == ProjectOrder.waiting_for_name.state:
+        await state.update_data(name=text)
         await message.answer("Расскажите, какой проект вас интересует 📐🛋")
         await state.set_state(ProjectOrder.waiting_for_description)
 
@@ -76,13 +82,14 @@ async def handle_buttons(message: types.Message, state: FSMContext):
     elif current_state == ProjectOrder.waiting_for_phone.state:
         await state.update_data(phone=text)
         data = await state.get_data()
+        name = data["name"]
         description = data["description"]
         phone = data["phone"]
 
         await message.answer("Спасибо за заказ! Мы скоро с вами свяжемся. 🙌")
         await bot.send_message(
             ADMIN_ID,
-            f"📐 Новый заказ проекта:\n\n📝 Описание: {description}\n📱 Телефон: {phone}\n🆔 От пользователя: @{message.from_user.username or 'без username'}"
+            f"📐 Новый заказ проекта:\n\n👤 Имя: {name}\n📝 Проект: {description}\n📱 Телефон: {phone}\n🆔 От пользователя: @{message.from_user.username or 'без username'}"
         )
         await state.clear()
 
