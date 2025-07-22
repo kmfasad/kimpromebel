@@ -88,7 +88,7 @@ async def start_consultation(message: types.Message, state: FSMContext):
 @router.message(Consultation.waiting_for_name)
 async def consult_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer(f"{message.text}, пожалуйста, отправьте ваш номер телефона 📱", reply_markup=phone_kb)
+    await message.answer(f"{message.text}, Отправьте ваш номер телефона 📱", reply_markup=phone_kb)
     await state.set_state(Consultation.waiting_for_phone)
 
 @router.message(F.contact, Consultation.waiting_for_phone)
@@ -116,7 +116,7 @@ async def project_description(message: types.Message, state: FSMContext):
 @router.message(ProjectOrder.waiting_for_name)
 async def project_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer(f"{message.text}, пожалуйста, отправьте номер телефона 📱", reply_markup=phone_kb)
+    await message.answer(f"{message.text}, Отправьте номер телефона 📱", reply_markup=phone_kb)
     await state.set_state(ProjectOrder.waiting_for_phone)
 
 @router.message(F.contact, ProjectOrder.waiting_for_phone)
@@ -145,7 +145,7 @@ async def confirm_submission(message: types.Message, state: FSMContext):
             f"🆔 От пользователя: @{message.from_user.username or 'без username'}"
         )
     else:
-        await message.answer("Спасибо за заказ! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
+        await message.answer("Благодарим за заказ! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
         await bot.send_message(
             ADMIN_ID,
             f"📐 Новый заказ проекта:\n\n"
@@ -160,7 +160,7 @@ async def confirm_submission(message: types.Message, state: FSMContext):
 # 📝 Подтверждение текстом
 async def ask_confirm(message: types.Message, state: FSMContext, from_project: bool):
     data = await state.get_data()
-    text = "Пожалуйста, подтвердите отправку заявки 👇\n\n"
+    text = "Подтвердите отправку заявки нажав кнопку ниже 👇\n\n"
     if from_project:
         text += (
             f"📝 Проект: {data['description']}\n"
@@ -190,9 +190,9 @@ async def send_contacts(message: types.Message):
 async def fallback(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
     if current_state is None:
-        await message.answer("Пожалуйста, нажмите кнопку ниже, чтобы начать 👇", reply_markup=main_kb)
+        await message.answer("Нажмите кнопку ниже, чтобы начать 👇", reply_markup=main_kb)
     else:
-        await message.answer("Пожалуйста, завершите текущую форму 📝 или нажмите ❌ Отменить", reply_markup=cancel_kb)
+        await message.answer("Завершите текущую форму 📝 или нажмите ❌ Отменить", reply_markup=cancel_kb)
 
 # Запуск
 async def main():
