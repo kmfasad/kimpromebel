@@ -34,7 +34,7 @@ class ProjectOrder(StatesGroup):
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
     await message.answer(
-        "Привет! 👋 Добро пожаловать в KIMpromebelbot. Выберите ниже что вас интересует 👇 ",
+        "Привет! 👋 Я ваш помощник КИМ. Выберите ниже что вас интересует 👇 ",
         reply_markup=main_kb
     )
 
