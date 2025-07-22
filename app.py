@@ -86,7 +86,7 @@ async def handle_buttons(message: types.Message, state: FSMContext):
         name = data["name"]
         phone = data["phone"]
 
-        await message.answer("Спасибо за заказ! Мы скоро с вами свяжемся. 🙌")
+        await message.answer("Благодарим за заказ! Мы скоро с вами свяжемся. 🙌")
         await bot.send_message(
             ADMIN_ID,
             f"📐 Новый заказ проекта:\n\n📝 Проект: {description}\n👤 Имя: {name}\n📱 Телефон: {phone}\n🆔 От пользователя: @{message.from_user.username or 'без username'}"
