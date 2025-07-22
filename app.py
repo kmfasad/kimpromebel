@@ -43,13 +43,14 @@ async def handle_buttons(message: types.Message, state: FSMContext):
     text = message.text
     current_state = await state.get_state()
 
+    # --- Консультация ---
     if text == "✅ Консультация":
         await message.answer("Как вас зовут? ✍️")
         await state.set_state(Consultation.waiting_for_name)
 
     elif current_state == Consultation.waiting_for_name.state:
         await state.update_data(name=text)
-        await message.answer("Пожалуйста, введите ваш номер телефона 📱")
+        await message.answer(f"{text}, пожалуйста, введите ваш номер телефона 📱")
         await state.set_state(Consultation.waiting_for_phone)
 
     elif current_state == Consultation.waiting_for_phone.state:
@@ -65,6 +66,7 @@ async def handle_buttons(message: types.Message, state: FSMContext):
         )
         await state.clear()
 
+    # --- Заказать проект ---
     elif text == "🛠 Заказать проект":
         await message.answer("Расскажите, какой проект вас интересует 📐🛋")
         await state.set_state(ProjectOrder.waiting_for_description)
@@ -76,7 +78,7 @@ async def handle_buttons(message: types.Message, state: FSMContext):
 
     elif current_state == ProjectOrder.waiting_for_name.state:
         await state.update_data(name=text)
-        await message.answer("Спасибо! Теперь оставьте, пожалуйста, ваш номер телефона 📱")
+        await message.answer(f"{text}, укажите ваш номер телефона 📱")
         await state.set_state(ProjectOrder.waiting_for_phone)
 
     elif current_state == ProjectOrder.waiting_for_phone.state:
@@ -86,13 +88,14 @@ async def handle_buttons(message: types.Message, state: FSMContext):
         name = data["name"]
         phone = data["phone"]
 
-        await message.answer("Благодарим за заказ! Мы скоро с вами свяжемся. 🙌")
+        await message.answer("Спасибо за заказ! Мы скоро с вами свяжемся. 🙌")
         await bot.send_message(
             ADMIN_ID,
             f"📐 Новый заказ проекта:\n\n📝 Проект: {description}\n👤 Имя: {name}\n📱 Телефон: {phone}\n🆔 От пользователя: @{message.from_user.username or 'без username'}"
         )
         await state.clear()
 
+    # --- Контакты ---
     elif text == "📞 Контакты":
         await message.answer(
             "📧 Email: kimpromebel@gmail.com\n"
