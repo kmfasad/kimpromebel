@@ -10,13 +10,11 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # ------------------- Конфиг -------------------
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "433698201"))
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Полный URL Cloud Run
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # полный публичный URL вашего Cloud Run сервиса
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
 
-if not TOKEN:
-    raise ValueError("Установите переменную окружения BOT_TOKEN")
-if not WEBHOOK_URL:
-    raise ValueError("Установите переменную окружения WEBHOOK_URL")
+if not TOKEN or not WEBHOOK_URL:
+    raise ValueError("Не заданы переменные окружения BOT_TOKEN или WEBHOOK_URL")
 
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
@@ -57,7 +55,7 @@ class ProjectOrder(StatesGroup):
     waiting_for_phone = State()
     waiting_for_confirm = State()
 
-# ------------------- Handlers -------------------
+# ------------------- handlers -------------------
 @router.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
@@ -165,10 +163,12 @@ app.include_router(router)
 
 @app.on_event("startup")
 async def on_startup():
+    # Устанавливаем webhook
     await bot.set_webhook(WEBHOOK_URL + WEBHOOK_PATH)
 
 @app.on_event("shutdown")
 async def on_shutdown():
+    # Удаляем webhook при завершении
     await bot.delete_webhook()
     await bot.session.close()
 
@@ -178,7 +178,7 @@ async def webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"ok": True}
 
-# ------------------- запуск -------------------
+# ------------------- запуск uvicorn для Cloud Run -------------------
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
