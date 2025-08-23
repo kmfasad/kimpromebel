@@ -11,7 +11,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "433698201"))
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # зададим при деплое
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # зададим в Cloud Run
 
 if not TOKEN:
     raise ValueError("Установите переменную окружения BOT_TOKEN")
