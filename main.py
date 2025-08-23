@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI, Request
-from aiogram import Bot, Dispatcher, types, F, Router
+from aiogram import Bot, Dispatcher, types, Router, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.state import State, StatesGroup
@@ -10,11 +10,13 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # ------------------- Конфиг -------------------
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "433698201"))
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Полный URL Cloud Run
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # зададим в Cloud Run
 
 if not TOKEN:
     raise ValueError("Установите переменную окружения BOT_TOKEN")
+if not WEBHOOK_URL:
+    raise ValueError("Установите переменную окружения WEBHOOK_URL")
 
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
@@ -55,7 +57,7 @@ class ProjectOrder(StatesGroup):
     waiting_for_phone = State()
     waiting_for_confirm = State()
 
-# ------------------- handlers -------------------
+# ------------------- Handlers -------------------
 @router.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
@@ -66,7 +68,6 @@ async def cancel_any(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("Действие отменено ❌", reply_markup=main_kb)
 
-# ✅ Консультация
 @router.message(F.text == "✅ Консультация")
 async def start_consultation(message: types.Message, state: FSMContext):
     await message.answer("Как вас зовут? ✍️", reply_markup=cancel_kb)
@@ -75,7 +76,7 @@ async def start_consultation(message: types.Message, state: FSMContext):
 @router.message(Consultation.waiting_for_name)
 async def consult_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer(f"{message.text}, Отправьте ваш номер телефона 📱", reply_markup=phone_kb)
+    await message.answer("Отправьте ваш номер телефона 📱", reply_markup=phone_kb)
     await state.set_state(Consultation.waiting_for_phone)
 
 @router.message(F.contact, Consultation.waiting_for_phone)
@@ -88,7 +89,6 @@ async def consult_phone(message: types.Message, state: FSMContext):
     await state.update_data(phone=message.text)
     await ask_confirm(message, state, from_project=False)
 
-# 🛠 Заказать проект
 @router.message(F.text == "🛠 Заказать проект")
 async def start_project(message: types.Message, state: FSMContext):
     await message.answer("Расскажите, какой проект вас интересует 📐🛋", reply_markup=cancel_kb)
@@ -103,7 +103,7 @@ async def project_description(message: types.Message, state: FSMContext):
 @router.message(ProjectOrder.waiting_for_name)
 async def project_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer(f"{message.text}, Отправьте номер телефона 📱", reply_markup=phone_kb)
+    await message.answer("Отправьте номер телефона 📱", reply_markup=phone_kb)
     await state.set_state(ProjectOrder.waiting_for_phone)
 
 @router.message(F.contact, ProjectOrder.waiting_for_phone)
@@ -116,7 +116,6 @@ async def project_phone(message: types.Message, state: FSMContext):
     await state.update_data(phone=message.text)
     await ask_confirm(message, state, from_project=True)
 
-# ✅ Подтверждение
 @router.message(F.text == "✅ Отправить")
 async def confirm_submission(message: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -126,24 +125,16 @@ async def confirm_submission(message: types.Message, state: FSMContext):
         await message.answer("Спасибо! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
         await bot.send_message(
             ADMIN_ID,
-            f"📩 Новая заявка на консультацию:\n\n"
-            f"👤 Имя: {data['name']}\n"
-            f"📱 Телефон: {data['phone']}\n"
-            f"🆔 От пользователя: @{message.from_user.username or 'без username'}"
+            f"📩 Новая заявка на консультацию:\n👤 Имя: {data['name']}\n📱 Телефон: {data['phone']}\n🆔 От пользователя: @{message.from_user.username or 'без username'}"
         )
     else:
         await message.answer("Благодарим за заказ! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
         await bot.send_message(
             ADMIN_ID,
-            f"📐 Новый заказ проекта:\n\n"
-            f"📝 Проект: {data['description']}\n"
-            f"👤 Имя: {data['name']}\n"
-            f"📱 Телефон: {data['phone']}\n"
-            f"🆔 От пользователя: @{message.from_user.username or 'без username'}"
+            f"📐 Новый заказ проекта:\n📝 Проект: {data['description']}\n👤 Имя: {data['name']}\n📱 Телефон: {data['phone']}\n🆔 От пользователя: @{message.from_user.username or 'без username'}"
         )
     await state.clear()
 
-# подтверждение заявки
 async def ask_confirm(message: types.Message, state: FSMContext, from_project: bool):
     data = await state.get_data()
     text = "Подтвердите отправку заявки 👇\n\n"
@@ -156,12 +147,10 @@ async def ask_confirm(message: types.Message, state: FSMContext, from_project: b
 
     await message.answer(text, reply_markup=confirm_kb)
 
-# 📞 Контакты
 @router.message(F.text == "📞 Контакты")
 async def send_contacts(message: types.Message):
     await message.answer("📧 Email: kimpromebel@gmail.com\n📩 Telegram: @mihailkuvila")
 
-# fallback
 @router.message()
 async def fallback(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
@@ -172,11 +161,11 @@ async def fallback(message: types.Message, state: FSMContext):
 
 # ------------------- FastAPI -------------------
 app = FastAPI()
+app.include_router(router)
 
 @app.on_event("startup")
 async def on_startup():
-    if WEBHOOK_URL:
-        await bot.set_webhook(WEBHOOK_URL + WEBHOOK_PATH)
+    await bot.set_webhook(WEBHOOK_URL + WEBHOOK_PATH)
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -188,3 +177,9 @@ async def webhook(request: Request):
     update = types.Update(**await request.json())
     await dp.feed_update(bot, update)
     return {"ok": True}
+
+# ------------------- запуск -------------------
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
