@@ -10,11 +10,11 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # ------------------- Конфиг -------------------
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "433698201"))
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # полный публичный URL вашего Cloud Run сервиса
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # пусто при первом деплое
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
 
-if not TOKEN or not WEBHOOK_URL:
-    raise ValueError("Не заданы переменные окружения BOT_TOKEN или WEBHOOK_URL")
+if not TOKEN:
+    raise ValueError("Установите переменную окружения BOT_TOKEN")
 
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
@@ -66,6 +66,7 @@ async def cancel_any(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("Действие отменено ❌", reply_markup=main_kb)
 
+# ✅ Консультация
 @router.message(F.text == "✅ Консультация")
 async def start_consultation(message: types.Message, state: FSMContext):
     await message.answer("Как вас зовут? ✍️", reply_markup=cancel_kb)
@@ -74,7 +75,7 @@ async def start_consultation(message: types.Message, state: FSMContext):
 @router.message(Consultation.waiting_for_name)
 async def consult_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer("Отправьте ваш номер телефона 📱", reply_markup=phone_kb)
+    await message.answer(f"{message.text}, Отправьте ваш номер телефона 📱", reply_markup=phone_kb)
     await state.set_state(Consultation.waiting_for_phone)
 
 @router.message(F.contact, Consultation.waiting_for_phone)
@@ -87,6 +88,7 @@ async def consult_phone(message: types.Message, state: FSMContext):
     await state.update_data(phone=message.text)
     await ask_confirm(message, state, from_project=False)
 
+# 🛠 Заказать проект
 @router.message(F.text == "🛠 Заказать проект")
 async def start_project(message: types.Message, state: FSMContext):
     await message.answer("Расскажите, какой проект вас интересует 📐🛋", reply_markup=cancel_kb)
@@ -101,7 +103,7 @@ async def project_description(message: types.Message, state: FSMContext):
 @router.message(ProjectOrder.waiting_for_name)
 async def project_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer("Отправьте номер телефона 📱", reply_markup=phone_kb)
+    await message.answer(f"{message.text}, Отправьте номер телефона 📱", reply_markup=phone_kb)
     await state.set_state(ProjectOrder.waiting_for_phone)
 
 @router.message(F.contact, ProjectOrder.waiting_for_phone)
@@ -114,6 +116,7 @@ async def project_phone(message: types.Message, state: FSMContext):
     await state.update_data(phone=message.text)
     await ask_confirm(message, state, from_project=True)
 
+# ✅ Подтверждение
 @router.message(F.text == "✅ Отправить")
 async def confirm_submission(message: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -123,16 +126,24 @@ async def confirm_submission(message: types.Message, state: FSMContext):
         await message.answer("Спасибо! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
         await bot.send_message(
             ADMIN_ID,
-            f"📩 Новая заявка на консультацию:\n👤 Имя: {data['name']}\n📱 Телефон: {data['phone']}\n🆔 От пользователя: @{message.from_user.username or 'без username'}"
+            f"📩 Новая заявка на консультацию:\n\n"
+            f"👤 Имя: {data['name']}\n"
+            f"📱 Телефон: {data['phone']}\n"
+            f"🆔 От пользователя: @{message.from_user.username or 'без username'}"
         )
     else:
         await message.answer("Благодарим за заказ! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
         await bot.send_message(
             ADMIN_ID,
-            f"📐 Новый заказ проекта:\n📝 Проект: {data['description']}\n👤 Имя: {data['name']}\n📱 Телефон: {data['phone']}\n🆔 От пользователя: @{message.from_user.username or 'без username'}"
+            f"📐 Новый заказ проекта:\n\n"
+            f"📝 Проект: {data['description']}\n"
+            f"👤 Имя: {data['name']}\n"
+            f"📱 Телефон: {data['phone']}\n"
+            f"🆔 От пользователя: @{message.from_user.username or 'без username'}"
         )
     await state.clear()
 
+# Подтверждение заявки
 async def ask_confirm(message: types.Message, state: FSMContext, from_project: bool):
     data = await state.get_data()
     text = "Подтвердите отправку заявки 👇\n\n"
@@ -145,10 +156,12 @@ async def ask_confirm(message: types.Message, state: FSMContext, from_project: b
 
     await message.answer(text, reply_markup=confirm_kb)
 
+# 📞 Контакты
 @router.message(F.text == "📞 Контакты")
 async def send_contacts(message: types.Message):
     await message.answer("📧 Email: kimpromebel@gmail.com\n📩 Telegram: @mihailkuvila")
 
+# fallback
 @router.message()
 async def fallback(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
@@ -159,16 +172,19 @@ async def fallback(message: types.Message, state: FSMContext):
 
 # ------------------- FastAPI -------------------
 app = FastAPI()
-app.include_router(router)
 
 @app.on_event("startup")
 async def on_startup():
-    # Устанавливаем webhook
-    await bot.set_webhook(WEBHOOK_URL + WEBHOOK_PATH)
+    if WEBHOOK_URL:
+        try:
+            await bot.set_webhook(WEBHOOK_URL + WEBHOOK_PATH)
+        except Exception as e:
+            print("Webhook не установлен:", e)
+    else:
+        print("WEBHOOK_URL не задан, пропускаем установку webhook")
 
 @app.on_event("shutdown")
 async def on_shutdown():
-    # Удаляем webhook при завершении
     await bot.delete_webhook()
     await bot.session.close()
 
@@ -178,7 +194,6 @@ async def webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"ok": True}
 
-# ------------------- запуск uvicorn для Cloud Run -------------------
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
