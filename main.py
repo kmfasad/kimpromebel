@@ -185,24 +185,3 @@ async def webhook(request: Request):
     update = types.Update(**await request.json())
     await dp.feed_update(bot, update)
     return {"ok": True}
-🔹 requirements.txt
-makefile
-Копировать
-Редактировать
-aiogram==3.4.1
-fastapi
-uvicorn[standard]
-🔹 Dockerfile
-dockerfile
-Копировать
-Редактировать
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
