@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # ------------------- Конфиг -------------------
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("7980968906:AAHlFiJRX9K0dkeMZw3M87Qszgm68E4IdOI")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "433698201"))
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # пусто при первом деплое
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
