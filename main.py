@@ -1,5 +1,4 @@
 import os
-import asyncio
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types, F, Router
 from aiogram.filters import Command
@@ -9,10 +8,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # ------------------- Конфиг -------------------
-TOKEN = "7980968906:AAHlFiJRX9K0dkeMZw3M87Qszgm68E4IdOI"  # твой токен уже вставлен
-ADMIN_ID = 433698201
-WEBHOOK_PATH = f"/webhook/{TOKEN}"  
-WEBHOOK_URL = f"https://YOUR_CLOUD_RUN_URL{WEBHOOK_PATH}"  # <-- заменится после деплоя
+TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "433698201"))
+WEBHOOK_PATH = f"/webhook/{TOKEN}"
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # зададим при деплое
+
+if not TOKEN:
+    raise ValueError("Установите переменную окружения BOT_TOKEN")
 
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
@@ -120,7 +122,7 @@ async def confirm_submission(message: types.Message, state: FSMContext):
     data = await state.get_data()
     current_state = await state.get_state()
 
-    if current_state.startswith("Consultation"):
+    if current_state and current_state.startswith("Consultation"):
         await message.answer("Спасибо! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
         await bot.send_message(
             ADMIN_ID,
@@ -173,7 +175,8 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def on_startup():
-    await bot.set_webhook(WEBHOOK_URL)
+    if WEBHOOK_URL:
+        await bot.set_webhook(WEBHOOK_URL + WEBHOOK_PATH)
 
 @app.on_event("shutdown")
 async def on_shutdown():
