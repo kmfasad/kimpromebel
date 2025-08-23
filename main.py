@@ -1,21 +1,26 @@
+import os
 import asyncio
-from aiogram import Bot, Dispatcher, types, F
+from fastapi import FastAPI, Request
+from aiogram import Bot, Dispatcher, types, F, Router
 from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram import Router
 
-bot = Bot(token="7980968906:AAHlFiJRX9K0dkeMZw3M87Qszgm68E4IdOI")
+# ------------------- Конфиг -------------------
+TOKEN = "7980968906:AAHlFiJRX9K0dkeMZw3M87Qszgm68E4IdOI"  # твой токен уже вставлен
+ADMIN_ID = 433698201
+WEBHOOK_PATH = f"/webhook/{TOKEN}"  
+WEBHOOK_URL = f"https://YOUR_CLOUD_RUN_URL{WEBHOOK_PATH}"  # <-- заменится после деплоя
+
+bot = Bot(token=TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
 
-ADMIN_ID = 433698201
-
-# Клавиатура главная
+# ------------------- клавиатуры -------------------
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="✅ Консультация")],
@@ -24,35 +29,19 @@ main_kb = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True
 )
-
-# Кнопка отмены
-cancel_kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="❌ Отменить")]
-    ],
-    resize_keyboard=True,
-    one_time_keyboard=True
-)
-
-# Кнопка отправки номера
+cancel_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отменить")]], resize_keyboard=True, one_time_keyboard=True)
 phone_kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="📱 Отправить номер", request_contact=True)],
-        [KeyboardButton(text="❌ Отменить")]
-    ],
+    keyboard=[[KeyboardButton(text="📱 Отправить номер", request_contact=True)],
+              [KeyboardButton(text="❌ Отменить")]],
     resize_keyboard=True
 )
-
-# Подтверждение заявки
 confirm_kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="✅ Отправить")],
-        [KeyboardButton(text="❌ Отменить")]
-    ],
+    keyboard=[[KeyboardButton(text="✅ Отправить")],
+              [KeyboardButton(text="❌ Отменить")]],
     resize_keyboard=True
 )
 
-# Состояния
+# ------------------- состояния -------------------
 class Consultation(StatesGroup):
     waiting_for_name = State()
     waiting_for_phone = State()
@@ -64,16 +53,12 @@ class ProjectOrder(StatesGroup):
     waiting_for_phone = State()
     waiting_for_confirm = State()
 
-# /start
+# ------------------- handlers -------------------
 @router.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer(
-        "Привет! 👋 Я ваш помощник КИМ. Выберите ниже что вас интересует 👇",
-        reply_markup=main_kb
-    )
+    await message.answer("Привет! 👋 Я ваш помощник КИМ. Выберите ниже что вас интересует 👇", reply_markup=main_kb)
 
-# ❌ Отменить
 @router.message(F.text == "❌ Отменить")
 async def cancel_any(message: types.Message, state: FSMContext):
     await state.clear()
@@ -154,25 +139,17 @@ async def confirm_submission(message: types.Message, state: FSMContext):
             f"📱 Телефон: {data['phone']}\n"
             f"🆔 От пользователя: @{message.from_user.username or 'без username'}"
         )
-
     await state.clear()
 
-# 📝 Подтверждение текстом
+# подтверждение заявки
 async def ask_confirm(message: types.Message, state: FSMContext, from_project: bool):
     data = await state.get_data()
-    text = "Подтвердите отправку заявки нажав кнопку ниже 👇\n\n"
+    text = "Подтвердите отправку заявки 👇\n\n"
     if from_project:
-        text += (
-            f"📝 Проект: {data['description']}\n"
-            f"👤 Имя: {data['name']}\n"
-            f"📱 Телефон: {data['phone']}"
-        )
+        text += f"📝 Проект: {data['description']}\n👤 Имя: {data['name']}\n📱 Телефон: {data['phone']}"
         await state.set_state(ProjectOrder.waiting_for_confirm)
     else:
-        text += (
-            f"👤 Имя: {data['name']}\n"
-            f"📱 Телефон: {data['phone']}"
-        )
+        text += f"👤 Имя: {data['name']}\n📱 Телефон: {data['phone']}"
         await state.set_state(Consultation.waiting_for_confirm)
 
     await message.answer(text, reply_markup=confirm_kb)
@@ -180,23 +157,52 @@ async def ask_confirm(message: types.Message, state: FSMContext, from_project: b
 # 📞 Контакты
 @router.message(F.text == "📞 Контакты")
 async def send_contacts(message: types.Message):
-    await message.answer(
-        "📧 Email: kimpromebel@gmail.com\n"
-        "📩 Telegram: @mihailkuvila"
-    )
+    await message.answer("📧 Email: kimpromebel@gmail.com\n📩 Telegram: @mihailkuvila")
 
-# Фолбэк
+# fallback
 @router.message()
 async def fallback(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
     if current_state is None:
-        await message.answer("Нажмите кнопку ниже, чтобы начать 👇", reply_markup=main_kb)
+        await message.answer("Нажмите кнопку ниже 👇", reply_markup=main_kb)
     else:
-        await message.answer("Завершите текущую форму 📝 или нажмите ❌ Отменить", reply_markup=cancel_kb)
+        await message.answer("Завершите форму 📝 или ❌ Отмените", reply_markup=cancel_kb)
 
-# Запуск
-async def main():
-    await dp.start_polling(bot)
+# ------------------- FastAPI -------------------
+app = FastAPI()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+@app.on_event("startup")
+async def on_startup():
+    await bot.set_webhook(WEBHOOK_URL)
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await bot.delete_webhook()
+    await bot.session.close()
+
+@app.post(WEBHOOK_PATH)
+async def webhook(request: Request):
+    update = types.Update(**await request.json())
+    await dp.feed_update(bot, update)
+    return {"ok": True}
+🔹 requirements.txt
+makefile
+Копировать
+Редактировать
+aiogram==3.4.1
+fastapi
+uvicorn[standard]
+🔹 Dockerfile
+dockerfile
+Копировать
+Редактировать
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
