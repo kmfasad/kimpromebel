@@ -13,13 +13,8 @@ TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "433698201"))
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-if TOKEN and WEBHOOK_URL:
-    WEBHOOK_PATH = f"/webhook/{TOKEN}"
-else:
-    WEBHOOK_PATH = "/webhook"
-
 if not TOKEN:
-    raise ValueError("Установите переменную окружения BOT_TOKEN")
+    raise ValueError("BOT_TOKEN not set!")
 
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
@@ -27,7 +22,7 @@ dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
 
-# ------------------- клавиатуры -------------------
+# ------------------- Клавиатуры -------------------
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="✅ Консультация")],
@@ -36,192 +31,72 @@ main_kb = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True
 )
-cancel_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отменить")]], resize_keyboard=True, one_time_keyboard=True)
-phone_kb = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="📱 Отправить номер", request_contact=True)],
-              [KeyboardButton(text="❌ Отменить")]],
-    resize_keyboard=True
-)
-confirm_kb = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="✅ Отправить")],
-              [KeyboardButton(text="❌ Отменить")]],
+
+cancel_kb = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="❌ Отменить")]], 
     resize_keyboard=True
 )
 
-# ------------------- состояния -------------------
+# ------------------- Состояния -------------------
 class Consultation(StatesGroup):
     waiting_for_name = State()
     waiting_for_phone = State()
-    waiting_for_confirm = State()
 
 class ProjectOrder(StatesGroup):
     waiting_for_description = State()
     waiting_for_name = State()
     waiting_for_phone = State()
-    waiting_for_confirm = State()
 
-# ------------------- handlers -------------------
+# ------------------- Handlers -------------------
 @router.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("Привет! 👋 Я ваш помощник КИМ. Выберите ниже что вас интересует 👇", reply_markup=main_kb)
-
-@router.message(Command("setwebhook"))
-async def cmd_setwebhook(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        await message.answer("Недостаточно прав.")
-        return
-        
-    if WEBHOOK_URL and TOKEN:
-        webhook_url = f"{WEBHOOK_URL}/webhook/{TOKEN}"
-        try:
-            await bot.set_webhook(webhook_url)
-            await message.answer(f"✅ Вебхук установлен: {webhook_url}")
-        except Exception as e:
-            await message.answer(f"❌ Ошибка: {e}")
-    else:
-        await message.answer("❌ WEBHOOK_URL или TOKEN не заданы.")
+    await message.answer("Привет! 👋 Выберите опцию:", reply_markup=main_kb)
 
 @router.message(F.text == "❌ Отменить")
-async def cancel_any(message: types.Message, state: FSMContext):
+async def cancel_cmd(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("Действие отменено ❌", reply_markup=main_kb)
+    await message.answer("Отменено", reply_markup=main_kb)
 
 @router.message(F.text == "✅ Консультация")
-async def start_consultation(message: types.Message, state: FSMContext):
-    await message.answer("Как вас зовут? ✍️", reply_markup=cancel_kb)
+async def consultation_cmd(message: types.Message, state: FSMContext):
+    await message.answer("Как вас зовут?", reply_markup=cancel_kb)
     await state.set_state(Consultation.waiting_for_name)
 
 @router.message(Consultation.waiting_for_name)
-async def consult_name(message: types.Message, state: FSMContext):
+async def consultation_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer("Отправьте ваш номер телефона 📱", reply_markup=phone_kb)
+    await message.answer("Ваш номер телефона?", reply_markup=cancel_kb)
     await state.set_state(Consultation.waiting_for_phone)
 
-@router.message(F.contact, Consultation.waiting_for_phone)
-async def consult_contact(message: types.Message, state: FSMContext):
-    await state.update_data(phone=message.contact.phone_number)
-    await ask_confirm(message, state, from_project=False)
-
 @router.message(Consultation.waiting_for_phone)
-async def consult_phone(message: types.Message, state: FSMContext):
-    await state.update_data(phone=message.text)
-    await ask_confirm(message, state, from_project=False)
-
-@router.message(F.text == "🛠 Заказать проект")
-async def start_project(message: types.Message, state: FSMContext):
-    await message.answer("Расскажите, какой проект вас интересует 📐🛋", reply_markup=cancel_kb)
-    await state.set_state(ProjectOrder.waiting_for_description)
-
-@router.message(ProjectOrder.waiting_for_description)
-async def project_description(message: types.Message, state: FSMContext):
-    await state.update_data(description=message.text)
-    await message.answer("Как вас зовут? ✍️", reply_markup=cancel_kb)
-    await state.set_state(ProjectOrder.waiting_for_name)
-
-@router.message(ProjectOrder.waiting_for_name)
-async def project_name(message: types.Message, state: FSMContext):
-    await state.update_data(name=message.text)
-    await message.answer("Отправьте номер телефона 📱", reply_markup=phone_kb)
-    await state.set_state(ProjectOrder.waiting_for_phone)
-
-@router.message(F.contact, ProjectOrder.waiting_for_phone)
-async def project_contact(message: types.Message, state: FSMContext):
-    await state.update_data(phone=message.contact.phone_number)
-    await ask_confirm(message, state, from_project=True)
-
-@router.message(ProjectOrder.waiting_for_phone)
-async def project_phone(message: types.Message, state: FSMContext):
-    await state.update_data(phone=message.text)
-    await ask_confirm(message, state, from_project=True)
-
-@router.message(F.text == "✅ Отправить")
-async def confirm_submission(message: types.Message, state: FSMContext):
+async def consultation_phone(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    current_state = await state.get_state()
-
-    # Проверяем, что мы именно в состоянии подтверждения
-    if not current_state or not (current_state.startswith("Consultation:waiting_for_confirm") or current_state.startswith("ProjectOrder:waiting_for_confirm")):
-        await message.answer("Нечего подтверждать. Начните заново.", reply_markup=main_kb)
-        await state.clear()
-        return
-
-    # Форматируем данные в красивый текст с эмодзи
-    if current_state.startswith("Consultation"):
-        text_to_admin = f"""
-📞 <b>НОВАЯ ЗАЯВКА НА КОНСУЛЬТАЦИЮ</b>
-
-👤 <b>Имя:</b> {data.get('name', 'Не указано')}
-📱 <b>Телефон:</b> {data.get('phone', 'Не указан')}
-⏰ <b>Время:</b> {message.date.strftime('%d.%m.%Y %H:%M')}
-        """
-        await message.answer("Спасибо! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
-        await bot.send_message(ADMIN_ID, text_to_admin, parse_mode="HTML")
-        
-    elif current_state.startswith("ProjectOrder"):
-        text_to_admin = f"""
-🛠 <b>НОВЫЙ ЗАКАЗ ПРОЕКТА</b>
-
-📐 <b>Описание проекта:</b>
-{data.get('description', 'Не указано')}
-
-👤 <b>Имя:</b> {data.get('name', 'Не указано')}
-📱 <b>Телефон:</b> {data.get('phone', 'Не указан')}
-⏰ <b>Время:</b> {message.date.strftime('%d.%m.%Y %H:%M')}
-        """
-        await message.answer("Благодарим за заказ! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
-        await bot.send_message(ADMIN_ID, text_to_admin, parse_mode="HTML")
-
+    await message.answer(f"Спасибо, {data.get('name')}! Мы свяжемся с вами.", reply_markup=main_kb)
+    await bot.send_message(ADMIN_ID, f"Новая заявка: {data.get('name')}, {message.text}")
     await state.clear()
 
-async def ask_confirm(message: types.Message, state: FSMContext, from_project: bool):
-    data = await state.get_data()
-    text = "Подтвердите отправку заявки 👇\n\n"
-    if from_project:
-        text += f"Проект: {data.get('description')}\nИмя: {data.get('name')}\nТелефон: {data.get('phone')}"
-        await state.set_state(ProjectOrder.waiting_for_confirm)
-    else:
-        text += f"Имя: {data.get('name')}\nТелефон: {data.get('phone')}"
-        await state.set_state(Consultation.waiting_for_confirm)
-    await message.answer(text, reply_markup=confirm_kb)
-
 @router.message(F.text == "📞 Контакты")
-async def send_contacts(message: types.Message):
+async def contacts_cmd(message: types.Message):
     await message.answer("Email: kimpromebel@gmail.com\nTelegram: @mihailkuvila")
 
-# fallback
-@router.message()
-async def fallback(message: types.Message, state: FSMContext):
-    current_state = await state.get_state()
-    if current_state is None:
-        await message.answer("Нажмите кнопку ниже 👇", reply_markup=main_kb)
-    else:
-        await message.answer("Завершите форму 📝 или ❌ Отмените", reply_markup=cancel_kb)
-
-# FastAPI
+# ------------------- FastAPI -------------------
 app = FastAPI()
 
 @app.on_event("startup")
 async def on_startup():
-    # Сначала удаляем старый вебхук
-    await bot.delete_webhook()
-    await asyncio.sleep(1)
-    
-    # Устанавливаем вебхук только если URL задан
+    print("Bot starting up...")
     if WEBHOOK_URL and TOKEN:
         webhook_url = f"{WEBHOOK_URL}/webhook/{TOKEN}"
-        print(f"Устанавливаем вебхук: {webhook_url}")
         try:
             await bot.set_webhook(webhook_url)
-            print("Webhook установлен успешно!")
+            print(f"Webhook set: {webhook_url}")
         except Exception as e:
-            print("Ошибка установки webhook:", e)
-    else:
-        print("WEBHOOK_URL или TOKEN не заданы, пропускаем установку webhook")
+            print(f"Webhook error: {e}")
 
 @app.on_event("shutdown")
 async def on_shutdown():
-    await bot.delete_webhook()
+    print("Bot shutting down...")
     await bot.session.close()
 
 @app.post("/webhook/{token}")
@@ -230,10 +105,13 @@ async def webhook(request: Request, token: str):
         update = types.Update(**await request.json())
         await dp.feed_update(bot, update)
         return {"ok": True}
-    else:
-        return {"error": "Invalid token"}
+    return {"error": "Invalid token"}
+
+@app.get("/")
+async def health_check():
+    return {"status": "ok", "bot": "running"}
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port)
