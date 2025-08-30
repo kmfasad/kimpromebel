@@ -8,10 +8,17 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # ------------------- Конфиг -------------------
-TOKEN = os.getenv("7980968906:AAHlFiJRX9K0dkeMZw3M87Qszgm68E4IdOI")
+# ВАЖНО: Получаем значение переменной окружения с именем "BOT_TOKEN"
+TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "433698201"))
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # пусто при первом деплое
-WEBHOOK_PATH = f"/webhook/{TOKEN}"
+# WEBHOOK_URL будет передан Google Cloud Run автоматически после деплоя
+# Его нужно будет добавить вручную в переменные окружения сервиса
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+# Формируем путь для вебхука. Используем токен, который теперь прочитан правильно.
+if TOKEN and WEBHOOK_URL:
+    WEBHOOK_PATH = f"/webhook/{TOKEN}"
+else:
+    WEBHOOK_PATH = "/webhook"  # Заглушка на время первого запуска
 
 if not TOKEN:
     raise ValueError("Установите переменную окружения BOT_TOKEN")
@@ -157,24 +164,32 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def on_startup():
-    if WEBHOOK_URL:
+    # Устанавливаем вебхук только если URL задан
+    if WEBHOOK_URL and TOKEN:
+        webhook_url = f"{WEBHOOK_URL}/webhook/{TOKEN}"
+        print(f"Устанавливаем вебхук: {webhook_url}")
         try:
-            await bot.set_webhook(WEBHOOK_URL + WEBHOOK_PATH)
+            await bot.set_webhook(webhook_url)
+            print("Webhook установлен успешно!")
         except Exception as e:
-            print("Webhook не установлен:", e)
+            print("Ошибка установки webhook:", e)
     else:
-        print("WEBHOOK_URL не задан, пропускаем установку webhook")
+        print("WEBHOOK_URL или TOKEN не заданы, пропускаем установку webhook")
 
 @app.on_event("shutdown")
 async def on_shutdown():
     await bot.delete_webhook()
     await bot.session.close()
 
-@app.post(WEBHOOK_PATH)
-async def webhook(request: Request):
-    update = types.Update(**await request.json())
-    await dp.feed_update(bot, update)
-    return {"ok": True}
+@app.post("/webhook/{token}")
+async def webhook(request: Request, token: str):
+    # Проверяем, совпадает ли токен в пути с нашим токеном бота
+    if token == TOKEN:
+        update = types.Update(**await request.json())
+        await dp.feed_update(bot, update)
+        return {"ok": True}
+    else:
+        return {"error": "Invalid token"}
 
 if __name__ == "__main__":
     import uvicorn
