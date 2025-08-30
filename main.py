@@ -122,16 +122,38 @@ async def project_phone(message: types.Message, state: FSMContext):
     await ask_confirm(message, state, from_project=True)
 
 @router.message(F.text == "✅ Отправить")
+@router.message(F.text == "✅ Отправить")
 async def confirm_submission(message: types.Message, state: FSMContext):
     data = await state.get_data()
     current_state = await state.get_state()
 
+    # Форматируем данные в красивый текст с эмодзи
     if current_state and current_state.startswith("Consultation"):
+        # Форматируем заявку на консультацию
+        text_to_admin = f"""
+📞 <b>НОВАЯ ЗАЯВКА НА КОНСУЛЬТАЦИЮ</b>
+
+👤 <b>Имя:</b> {data.get('name', 'Не указано')}
+📱 <b>Телефон:</b> {data.get('phone', 'Не указан')}
+⏰ <b>Время:</b> {message.date.strftime('%d.%m.%Y %H:%M')}
+        """
         await message.answer("Спасибо! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
-        await bot.send_message(ADMIN_ID, f"Новая заявка: {data}")
-    else:
+        await bot.send_message(ADMIN_ID, text_to_admin, parse_mode="HTML")
+        
+    elif current_state and current_state.startswith("ProjectOrder"):
+        # Форматируем заявку на проект
+        text_to_admin = f"""
+🛠 <b>НОВЫЙ ЗАКАЗ ПРОЕКТА</b>
+
+📐 <b>Описание проекта:</b>
+{data.get('description', 'Не указано')}
+
+👤 <b>Имя:</b> {data.get('name', 'Не указано')}
+📱 <b>Телефон:</b> {data.get('phone', 'Не указан')}
+⏰ <b>Время:</b> {message.date.strftime('%d.%m.%Y %H:%M')}
+        """
         await message.answer("Благодарим за заказ! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
-        await bot.send_message(ADMIN_ID, f"Новый проект: {data}")
+        await bot.send_message(ADMIN_ID, text_to_admin, parse_mode="HTML")
 
     await state.clear()
 
