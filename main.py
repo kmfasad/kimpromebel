@@ -1,4 +1,5 @@
 import os
+import asyncio
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types, Router, F
 from aiogram.filters import Command
@@ -8,17 +9,14 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # ------------------- Конфиг -------------------
-# ВАЖНО: Получаем значение переменной окружения с именем "BOT_TOKEN"
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "433698201"))
-# WEBHOOK_URL будет передан Google Cloud Run автоматически после деплоя
-# Его нужно будет добавить вручную в переменные окружения сервиса
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-# Формируем путь для вебхука. Используем токен, который теперь прочитан правильно.
+
 if TOKEN and WEBHOOK_URL:
     WEBHOOK_PATH = f"/webhook/{TOKEN}"
 else:
-    WEBHOOK_PATH = "/webhook"  # Заглушка на время первого запуска
+    WEBHOOK_PATH = "/webhook"
 
 if not TOKEN:
     raise ValueError("Установите переменную окружения BOT_TOKEN")
@@ -67,6 +65,22 @@ class ProjectOrder(StatesGroup):
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("Привет! 👋 Я ваш помощник КИМ. Выберите ниже что вас интересует 👇", reply_markup=main_kb)
+
+@router.message(Command("setwebhook"))
+async def cmd_setwebhook(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("Недостаточно прав.")
+        return
+        
+    if WEBHOOK_URL and TOKEN:
+        webhook_url = f"{WEBHOOK_URL}/webhook/{TOKEN}"
+        try:
+            await bot.set_webhook(webhook_url)
+            await message.answer(f"✅ Вебхук установлен: {webhook_url}")
+        except Exception as e:
+            await message.answer(f"❌ Ошибка: {e}")
+    else:
+        await message.answer("❌ WEBHOOK_URL или TOKEN не заданы.")
 
 @router.message(F.text == "❌ Отменить")
 async def cancel_any(message: types.Message, state: FSMContext):
@@ -122,14 +136,18 @@ async def project_phone(message: types.Message, state: FSMContext):
     await ask_confirm(message, state, from_project=True)
 
 @router.message(F.text == "✅ Отправить")
-@router.message(F.text == "✅ Отправить")
 async def confirm_submission(message: types.Message, state: FSMContext):
     data = await state.get_data()
     current_state = await state.get_state()
 
+    # Проверяем, что мы именно в состоянии подтверждения
+    if not current_state or not (current_state.startswith("Consultation:waiting_for_confirm") or current_state.startswith("ProjectOrder:waiting_for_confirm")):
+        await message.answer("Нечего подтверждать. Начните заново.", reply_markup=main_kb)
+        await state.clear()
+        return
+
     # Форматируем данные в красивый текст с эмодзи
-    if current_state and current_state.startswith("Consultation"):
-        # Форматируем заявку на консультацию
+    if current_state.startswith("Consultation"):
         text_to_admin = f"""
 📞 <b>НОВАЯ ЗАЯВКА НА КОНСУЛЬТАЦИЮ</b>
 
@@ -140,8 +158,7 @@ async def confirm_submission(message: types.Message, state: FSMContext):
         await message.answer("Спасибо! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
         await bot.send_message(ADMIN_ID, text_to_admin, parse_mode="HTML")
         
-    elif current_state and current_state.startswith("ProjectOrder"):
-        # Форматируем заявку на проект
+    elif current_state.startswith("ProjectOrder"):
         text_to_admin = f"""
 🛠 <b>НОВЫЙ ЗАКАЗ ПРОЕКТА</b>
 
@@ -186,6 +203,10 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def on_startup():
+    # Сначала удаляем старый вебхук
+    await bot.delete_webhook()
+    await asyncio.sleep(1)
+    
     # Устанавливаем вебхук только если URL задан
     if WEBHOOK_URL and TOKEN:
         webhook_url = f"{WEBHOOK_URL}/webhook/{TOKEN}"
@@ -205,7 +226,6 @@ async def on_shutdown():
 
 @app.post("/webhook/{token}")
 async def webhook(request: Request, token: str):
-    # Проверяем, совпадает ли токен в пути с нашим токеном бота
     if token == TOKEN:
         update = types.Update(**await request.json())
         await dp.feed_update(bot, update)
