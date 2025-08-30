@@ -44,7 +44,7 @@ phone_kb = ReplyKeyboardMarkup(
 )
 
 confirm_kb = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="✅ Отправить")],
+    keyboard=[[KeyboardButton(text="✅ Подтвердить")],
               [KeyboardButton(text="❌ Отменить")]],
     resize_keyboard=True
 )
