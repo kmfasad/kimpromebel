@@ -98,7 +98,7 @@ async def consultation_phone(message: types.Message, state: FSMContext):
     await message.answer(text, reply_markup=confirm_kb)
     await state.set_state(Consultation.waiting_for_confirm)
 
-@router.message(Consultation.waiting_for_confirm, F.text == "✅ Отправить")
+@router.message(Consultation.waiting_for_confirm, F.text == "✅ Подтвердить")
 async def consultation_confirm(message: types.Message, state: FSMContext):
     data = await state.get_data()
     await message.answer("Спасибо! Мы скоро с вами свяжемся. 🙌", reply_markup=main_kb)
