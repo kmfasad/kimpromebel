@@ -1,15 +1,17 @@
+# Используем официальный легкий образ Python
 FROM python:3.11-slim
 
+# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-COPY requirements.txt requirements.txt
+# Сначала копируем файл с зависимостями
+COPY requirements.txt .
+
+# Устанавливаем все зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Теперь копируем весь остальной код проекта
 COPY . .
 
-ENV PORT=8080
-ENV BOT_TOKEN=7980968906:AAHlFiJRX9K0dkeMZw3M87Qszgm68E4IdOI
-ENV ADMIN_ID=433698201
-ENV WEBHOOK_URL=https://your-cloud-run-url.a.run.app
-
-CMD ["python", "main.py"]
+# Запускаем наш скрипт через uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
